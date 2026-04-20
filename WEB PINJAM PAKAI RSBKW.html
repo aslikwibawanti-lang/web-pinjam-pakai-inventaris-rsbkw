@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Inventaris UPT RSBKW KEDIRI</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        :root { --primary: #2c3e50; --accent: #3498db; --success: #27ae60; --danger: #e74c3c; --edit: #f39c12; --purple: #9b59b6; }
+        body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; margin: 0; padding: 20px; }
+        .container { max-width: 1250px; margin: auto; display: none; }
+        .box { background: white; padding: 25px; border-radius: 10px; margin-bottom: 25px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); border-top: 5px solid var(--accent); }
+        .input-error { border: 2px solid var(--danger) !important; background-color: #fff5f5 !important; }
+        .grid-form { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 20px; }
+        label { font-size: 12px; font-weight: bold; color: #555; display: block; margin-bottom: 5px; }
+        input, select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box; transition: 0.3s; }
+        .item-row { display: grid; grid-template-columns: 2fr 1fr 1.5fr; gap: 10px; margin-bottom: 10px; align-items: center; background: #f9f9f9; padding: 10px; border-radius: 8px; border: 1px solid #eee; }
+        .status-indicator { font-size: 11px; font-weight: bold; padding: 5px; border-radius: 4px; text-align: center; }
+        .is-available { background: #e8f5e9; color: #2e7d32; border: 1px solid #2e7d32; }
+        .is-busy { background: #ffebee; color: #c62828; border: 1px solid #c62828; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 12px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        th { background: #f8f9fa; color: var(--primary); }
+        .btn { padding: 10px 15px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; transition: 0.2s; }
+        .btn-save { background: var(--success); color: white; width: 100%; margin-top: 10px; font-size: 14px; }
+        .btn-mgmt { background: var(--purple); color: white; flex: 1; }
+        .btn-archive { background: var(--primary); color: white; flex: 1; }
+        .mgmt-panel { display: none; margin-top: 20px; padding: 15px; background: #fdfaff; border: 1px dashed var(--purple); border-radius: 8px; }
+        .list-box { height: 120px; overflow-y: auto; background: white; border: 1px solid #ddd; padding: 5px; font-size: 11px; margin-top: 5px; }
+        #login-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--primary); display: flex; justify-content: center; align-items: center; z-index: 2000; }
+        .login-card { background: white; padding: 40px; border-radius: 12px; text-align: center; width: 320px; }
+        @media print { .no-print, .btn, .action-cols { display: none !important; } }
+    </style>
+</head>
+<body>
+
+    <div id="login-overlay">
+        <div class="login-card">
+            <h2 style="color: var(--primary);">LOGIN SISTEM</h2>
+            <input type="text" id="userInput" placeholder="Username">
+            <input type="password" id="passInput" placeholder="Password">
+            <button class="btn btn-save" onclick="validateLogin()">MASUK</button>
+        </div>
+    </div>
+
+    <div class="container" id="main-app">
+        <header style="text-align:center; margin-bottom: 20px;">
+            <h1 style="margin:0;">SISTEM INVENTARIS UPT RSBKW KEDIRI</h1>
+            <p id="month-display" style="font-weight:bold; color:var(--accent); font-size: 18px;"></p>
+        </header>
+
+        <div class="box no-print">
+            <h3>Input Peminjaman Barang</h3>
+            <div class="grid-form">
+                <div><label>Nama Peminjam *</label><input type="text" id="f_peminjam" class="v-check" placeholder="Nama Lengkap"></div>
+                <div>
+                    <label>Identitas *</label>
+                    <select id="f_identitas_select" class="v-check" onchange="toggleManual('f_identitas_select', 'f_identitas_manual')"></select>
+                    <input type="text" id="f_identitas_manual" style="display:none; margin-top:5px;" placeholder="Lainnya...">
+                </div>
+                <div>
+                    <label>Lokasi *</label>
+                    <select id="f_ruangan_select" class="v-check" onchange="toggleManual('f_ruangan_select', 'f_ruangan_manual')"></select>
+                    <input type="text" id="f_ruangan_manual" style="display:none; margin-top:5px;" placeholder="Lainnya...">
+                </div>
+                <div><label>Tgl Pinjam *</label><input type="date" id="f_tglPinjam" class="v-check" onchange="checkAllStatuses()"></div>
+                <div><label>Tgl Kembali *</label><input type="date" id="f_tglKembali" class="v-check" onchange="checkAllStatuses()"></div>
+                <div>
+                    <label>Keperluan *</label>
+                    <select id="f_keperluan_select" class="v-check" onchange="toggleManual('f_keperluan_select', 'f_keperluan_manual')"></select>
+                    <input type="text" id="f_keperluan_manual" style="display:none; margin-top:5px;" placeholder="Lainnya...">
+                </div>
+            </div>
+
+            <div id="items-container"></div>
+            
+            <button class="btn btn-save" id="btn-main-action" onclick="simpanData()">SIMPAN DATA PEMINJAMAN</button>
+            
+            <div style="display: flex; gap: 10px; margin-top: 15px;">
+                <button class="btn btn-mgmt" onclick="openMgmt()">PENGATURAN ITEM</button>
+                <button class="btn btn-archive" onclick="openArchive()">AKSES ARSIP</button>
+            </div>
+
+            <div id="mgmt-panel" class="mgmt-panel">
+                <h4>Pengaturan Daftar Pilihan</h4>
+                <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
+                    <div><label>Tambah Barang</label><input type="text" id="new_barang" placeholder="Nama Barang..."><button onclick="addOpt('barang')" style="width:100%; margin-top:5px;">Tambah</button><div id="list_barang" class="list-box"></div></div>
+                    <div><label>Tambah Ruangan</label><input type="text" id="new_ruangan" placeholder="Nama Ruangan..."><button onclick="addOpt('ruangan')" style="width:100%; margin-top:5px;">Tambah</button><div id="list_ruangan" class="list-box"></div></div>
+                    <div><label>Tambah Keperluan</label><input type="text" id="new_keperluan" placeholder="Keperluan..."><button onclick="addOpt('keperluan')" style="width:100%; margin-top:5px;">Tambah</button><div id="list_keperluan" class="list-box"></div></div>
+                </div>
+            </div>
+
+            <div id="archive-panel" class="mgmt-panel" style="background:#f0f4f8; border-color:var(--primary);">
+                <h4>Rekapan Arsip Bulanan</h4>
+                <div id="archive-list"></div>
+            </div>
+        </div>
+
+        <div class="box">
+            <h3>Laporan Inventaris Aktif (Bulan Berjalan)</h3>
+            <table id="tabelInventaris">
+                <thead>
+                    <tr><th>No</th><th>Nama</th><th>Identitas</th><th>Barang (Qty)</th><th>Lokasi</th><th>Pinjam</th><th>Kembali</th><th class="action-cols no-print">Aksi</th></tr>
+                </thead>
+                <tbody id="isiTabel"></tbody>
+            </table>
+            <div class="no-print" style="margin-top:15px;">
+                <button class="btn" style="background:#1f6e43; color:white;" onclick="exportExcel()">Export Excel</button>
+                <button class="btn" style="background:#7f8c8d; color:white; margin-left:10px;" onclick="window.print()">Cetak PDF</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+        let options = JSON.parse(localStorage.getItem('sys_options')) || {
+            identitas: ["Penerima Manfaat", "Staff UPT RSBKW"],
+            barang: ["001 LCD Proyektor", "002 Sound System", "003 Oler Biru"],
+            ruangan: ["Aula", "Tata Usaha", "Ketrampilan Tata Boga"],
+            keperluan: ["Kegiatan Ketrampilan", "Rapat", "Senam"]
+        };
+
+        let activeData = [];
+        let archives = JSON.parse(localStorage.getItem('sys_archives')) || {};
+        let editIdx = -1;
+
+        function validateLogin() {
+            const user = document.getElementById('userInput').value;
+            const pass = document.getElementById('passInput').value;
+            if(user === "pinjam" && pass === "pinjam123") {
+                document.getElementById('login-overlay').style.display = 'none';
+                document.getElementById('main-app').style.display = 'block';
+                init();
+            } else { alert("Login Gagal!"); }
+        }
+
+        function init() {
+            const d = new Date();
+            const currentMonthKey = `${monthNames[d.getMonth()]}_${d.getFullYear()}`;
+            document.getElementById('month-display').innerText = currentMonthKey.replace('_',' ');
+            activeData = JSON.parse(localStorage.getItem('active_data')) || [];
+            
+            const lastSessionMonth = localStorage.getItem('last_session_month');
+            if(lastSessionMonth && lastSessionMonth !== currentMonthKey) {
+                if(activeData.length > 0) {
+                    archives[lastSessionMonth] = [...activeData];
+                    localStorage.setItem('sys_archives', JSON.stringify(archives));
+                    activeData = []; 
+                    localStorage.setItem('active_data', JSON.stringify(activeData));
+                }
+            }
+            localStorage.setItem('last_session_month', currentMonthKey);
+            refreshDropdowns();
+            tampilkanTabel();
+            addNewItemRow();
+        }
+
+        function addNewItemRow() { 
+            const id = "r-"+Date.now(); 
+            document.getElementById('items-container').innerHTML = `
+                <div class="item-row" id="${id}">
+                    <div>
+                        <select class="item-select" onchange="handleItemChange(this)">${generateOptions(options.barang)}</select>
+                        <input type="text" class="item-manual" style="display:none; margin-top:5px;" placeholder="Lainnya...">
+                    </div>
+                    <div><input type="number" class="item-qty" value="1" readonly></div>
+                    <div class="status-indicator is-available">TERSEDIA</div>
+                </div>`; 
+        }
+
+        function simpanData() {
+            let kosong = false;
+            document.querySelectorAll('.v-check').forEach(el => {
+                if(!el.value) { el.classList.add('input-error'); kosong = true; } 
+                else { el.classList.remove('input-error'); }
+            });
+            if(kosong) return alert("Mohon isi kolom merah!");
+
+            const data = {
+                nama: document.getElementById('f_peminjam').value,
+                identitas: getVal('f_identitas_select', 'f_identitas_manual'),
+                ruangan: getVal('f_ruangan_select', 'f_ruangan_manual'),
+                keperluan: getVal('f_keperluan_select', 'f_keperluan_manual'),
+                tglPinjam: document.getElementById('f_tglPinjam').value,
+                tglKembali: document.getElementById('f_tglKembali').value,
+                barang: Array.from(document.querySelectorAll('.item-row')).map(row => {
+                    const n = row.querySelector('.item-select').value === "lainnya" ? row.querySelector('.item-manual').value : row.querySelector('.item-select').value;
+                    const q = row.querySelector('.item-qty').value;
+                    return n ? `${n} (${q})` : null;
+                }).filter(x => x).join(", ")
+            };
+
+            const scriptURL = 'https://script.google.com/macros/s/AKfycby90uIhzlBki09NsgXQDX9DC4sX8lj3ue6WQZqfmAKzzZN0EXNMAeZEmKGiGRUxD1cmpw/exec';
+            const btn = document.getElementById('btn-main-action');
+            btn.innerText = "MENGIRIM...";
+            btn.disabled = true;
+
+            const formData = new URLSearchParams();
+            for (const key in data) { formData.append(key, data[key]); }
+
+            fetch(scriptURL, { method: 'POST', body: formData })
+            .then(() => {
+                alert("Berhasil!");
+                if(editIdx > -1) { activeData[editIdx] = data; editIdx = -1; } else { activeData.push(data); }
+                localStorage.setItem('active_data', JSON.stringify(activeData));
+                tampilkanTabel(); resetForm();
+            })
+            .catch(error => alert("Gagal: " + error.message))
+            .finally(() => {
+                btn.innerText = "SIMPAN DATA PEMINJAMAN";
+                btn.disabled = false;
+            });
+        }
+
+        function checkAllStatuses() {
+            const tP = document.getElementById('f_tglPinjam').value;
+            const tK = document.getElementById('f_tglKembali').value;
+            document.querySelectorAll('.item-row').forEach(row => {
+                const name = row.querySelector('.item-select').value === "lainnya" ? row.querySelector('.item-manual').value : row.querySelector('.item-select').value;
+                const st = row.querySelector('.status-indicator');
+                if(!name || !tP || !tK) return;
+                const bentrok = activeData.some((db, i) => {
+                    if(i === editIdx) return false;
+                    if(db.barang.includes(name)) {
+                        return (new Date(tP) <= new Date(db.tglKembali) && new Date(tK) >= new Date(db.tglPinjam));
+                    }
+                    return false;
+                });
+                st.innerText = bentrok ? "MASIH DIPINJAM" : "TERSEDIA";
+                st.className = bentrok ? "status-indicator is-busy" : "status-indicator is-available";
+            });
+        }
+
+        function openMgmt() { if(prompt("Password:") === "newdata123") { document.getElementById('mgmt-panel').style.display = 'block'; renderMgmtList(); } }
+        function openArchive() { if(prompt("Password:") === "simpandata123") { document.getElementById('archive-panel').style.display = 'block'; renderArchiveList(); } }
+
+        function renderMgmtList() { 
+            ['barang','ruangan','keperluan'].forEach(t => { 
+                const el = document.getElementById(`list_${t}`);
+                if(el) el.innerHTML = options[t].map((o,i) => `<div>${o} <span onclick="options['${t}'].splice(${i},1);localStorage.setItem('sys_options',JSON.stringify(options));renderMgmtList();refreshDropdowns();" style="color:red; cursor:pointer;">[x]</span></div>`).join(""); 
+            }); 
+        }
+
+        function tampilkanTabel() {
+            document.getElementById('isiTabel').innerHTML = activeData.map((d, i) => `
+                <tr><td>${i+1}</td><td>${d.nama}</td><td>${d.identitas}</td><td>${d.barang}</td><td>${d.ruangan}</td><td>${d.tglPinjam}</td><td>${d.tglKembali}</td>
+                <td class="action-cols no-print">
+                    <button style="background:var(--edit); color:white; border:none; border-radius:3px;" onclick="editData(${i})">Edit</button>
+                    <button style="background:var(--danger); color:white; border:none; border-radius:3px;" onclick="hapusData(${i})">X</button>
+                </td></tr>`).join("");
+        }
+
+        function editData(idx) { if(prompt("Password:") === "newdata123") { editIdx = idx; const d = activeData[idx]; document.getElementById('f_peminjam').value = d.nama; document.getElementById('f_tglPinjam').value = d.tglPinjam; document.getElementById('f_tglKembali').value = d.tglKembali; document.getElementById('btn-main-action').innerText = "PERBARUI DATA"; window.scrollTo(0,0); } }
+        function hapusData(idx) { if(prompt("Password:") === "newdata123") { activeData.splice(idx, 1); localStorage.setItem('active_data', JSON.stringify(activeData)); tampilkanTabel(); } }
+        function exportExcel() { if(prompt("Password:") === "simpandata123") { XLSX.writeFile(XLSX.utils.table_to_book(document.getElementById("tabelInventaris")), "Laporan.xlsx"); } }
+        function refreshDropdowns() { 
+            const g = (l) => `<option value="">-- Pilih --</option>` + l.map(o => `<option value="${o}">${o}</option>`).join("") + `<option value="lainnya">Lainnya...</option>`; 
+            document.getElementById('f_identitas_select').innerHTML = g(options.identitas); 
+            document.getElementById('f_ruangan_select').innerHTML = g(options.ruangan); 
+            document.getElementById('f_keperluan_select').innerHTML = g(options.keperluan); 
+        }
+        function addOpt(type) { 
+            const val = document.getElementById(`new_${type}`).value; 
+            if(val){ options[type].push(val); localStorage.setItem('sys_options', JSON.stringify(options)); renderMgmtList(); refreshDropdowns(); document.getElementById(`new_${type}`).value=""; } 
+        }
+        function generateOptions(l) { return `<option value="">-- Pilih --</option>` + l.map(o => `<option value="${o}">${o}</option>`).join("") + `<option value="lainnya">Lainnya...</option>`; }
+        function getVal(s, m) { return document.getElementById(s).value === "lainnya" ? document.getElementById(m).value : document.getElementById(s).value; }
+        function toggleManual(s, m) { document.getElementById(m).style.display = (document.getElementById(s).value === "lainnya") ? "block" : "none"; }
+        function handleItemChange(el) { el.parentElement.querySelector('.item-manual').style.display = (el.value === "lainnya") ? "block" : "none"; checkAllStatuses(); }
+        function resetForm() { document.getElementById('f_peminjam').value = ""; addNewItemRow(); document.getElementById('btn-main-action').innerText = "SIMPAN DATA PEMINJAMAN"; }
+        function renderArchiveList() {
+            const keys = Object.keys(archives);
+            document.getElementById('archive-list').innerHTML = keys.length ? keys.map(k => `<div style="padding:10px; border-bottom:1px solid #ddd;">${k.replace('_',' ')} <button onclick="downloadArchive('${k}')">Export Excel</button></div>`).join("") : "Kosong";
+        }
+        function downloadArchive(key) {
+            const ws = XLSX.utils.json_to_sheet(archives[key]);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Arsip");
+            XLSX.writeFile(wb, `Arsip_${key}.xlsx`);
+        }
+    </script>
+</body>
+</html>
